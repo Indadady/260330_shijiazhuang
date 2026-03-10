@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  
+  <!-- 카카오톡 공유용 메타태그 (OG Tags) -->
+  <meta property="og:title" content="에이스투어 - 동양의 그랜드캐년 태항산 5일" />
+  <meta property="og:description" content="제주항공 석가장 첫 취항 단독특가! 노옵션/준5성급 599,000원~" />
+  <meta property="og:image" content="https://image1.lottetour.com/static/trvtour/201910/742/f5e62609b14448fb39a777bb52edc31d.jpg" />
+  <meta property="og:type" content="website" />
+
+  <title>에이스투어 - 동양의 그랜드캐년 태항산 5일</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Phosphor Icons (웹 폰트 아이콘) -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel for in-browser JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 구글 애널리틱스 (추후 G-XXXXXXXXXX 부분을 실제 ID로 변경하세요) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+
+  <style>
+    /* 지도 동선 애니메이션 및 커스텀 스타일 */
+    .leaflet-path-animated {
+      stroke-dasharray: 3000;
+      stroke-dashoffset: 3000;
+      animation: drawLine 3.5s ease-out forwards;
+    }
+    @keyframes drawLine {
+      to { stroke-dashoffset: 0; }
+    }
+    .custom-leaflet-icon {
+      background: transparent;
+      border: none;
+    }
+    /* 스크롤바 숨기기 (가로 스크롤 영역용) */
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
+    /* 페이드인 애니메이션 */
+    .animate-fadeIn {
+      animation: fadeIn 0.5s ease-in forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      const [activeDay, setActiveDay] = useState('all');
+      const [activeTab, setActiveTab] = useState(1);
+      const mapRef = useRef(null);
+      const layerGroupRef = useRef(null);
+
+      // 중국 현지 GPS 좌표
+      const mapLocations = {
+        shijiazhuang: { lat: 38.2806, lng: 114.6972, name: '석가장공항', type: 'airport' },
+        guangfu: { lat: 36.6900, lng: 114.7300, name: '광부고성', type: 'spot' },
+        linzhou: { lat: 36.0667, lng: 113.8167, name: '임주(숙소)', type: 'hotel' },
+        bochen: { lat: 36.2500, lng: 113.6500, name: '보천대협곡', type: 'mountain' },
+        tianjie: { lat: 35.6500, lng: 113.6000, name: '천계산', type: 'mountain' },
+        taihang: { lat: 36.1500, lng: 113.7000, name: '태항대협곡', type: 'mountain' },
+        huixian: { lat: 35.4600, lng: 113.8000, name: '휘현(숙소)', type: 'hotel' },
+        wuzhi: { lat: 36.5500, lng: 113.9000, name: '오지산', type: 'mountain' },
+        handan: { lat: 36.6256, lng: 114.4894, name: '한단(숙소)', type: 'hotel' },
+        zhaoyun: { lat: 38.1433, lng: 114.5683, name: '조운묘', type: 'spot' }
+      };
+
+      const routes = {
+        all: ['shijiazhuang', 'guangfu', 'linzhou', 'bochen', 'linzhou', 'tianjie', 'linzhou', 'taihang', 'huixian', 'wuzhi', 'handan', 'zhaoyun', 'shijiazhuang'],
+        day1: ['shijiazhuang', 'guangfu', 'linzhou'],
+        day2: ['linzhou', 'bochen', 'linzhou', 'tianjie', 'linzhou'], 
+        day3: ['linzhou', 'taihang', 'huixian'], 
+        day4: ['huixian', 'wuzhi', 'handan'], 
+        day5: ['handan', 'zhaoyun', 'shijiazhuang'] 
+      };
+
+      const getRouteColor = (day) => {
+        switch(day) {
+          case 'day1': return '#3b82f6'; 
+          case 'day2': return '#10b981'; 
+          case 'day3': return '#f59e0b'; 
+          case 'day4': return '#8b5cf6'; 
+          case 'day5': return '#ef4444'; 
+          default: return '#334155'; // 전체 노선 (실선)
+        }
+      };
+
+      const getIconHtml = (type, name) => {
+        let bgColor = '#16a34a'; 
+        let iconCode = '📸';
+        
+        if (type === 'airport') { bgColor = '#2563eb'; iconCode = '✈️'; }
+        else if (type === 'hotel') { bgColor = '#9333ea'; iconCode = '🏨'; }
+        else if (type === 'mountain') { bgColor = '#ea580c'; iconCode = '⛰️'; } 
+
+        return `
+          <div style="position: relative; width: 34px; height: 34px;">
+            <div style="background-color: ${bgColor}; border: 2.5px solid white; border-radius: 50%; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px; position: relative; z-index: 2;">
+              ${iconCode}
+            </div>
+            <div style="position: absolute; top: 36px; left: 50%; transform: translateX(-50%); background: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 800; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 1px solid #e2e8f0; color: #1e293b; z-index: 3;">
+              ${name}
+            </div>
+          </div>
+        `;
+      };
+
+      // 지도 렌더링
+      useEffect(() => {
+        if (!window.L || !document.getElementById('real-map')) return;
+
+        if (!mapRef.current) {
+          mapRef.current = window.L.map('real-map', {
+            zoomControl: false,
+            attributionControl: true
+          });
+
+          window.L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            maxZoom: 18,
+          }).addTo(mapRef.current);
+
+          layerGroupRef.current = window.L.layerGroup().addTo(mapRef.current);
+        }
+
+        const map = mapRef.current;
+        const layerGroup = layerGroupRef.current;
+
+        layerGroup.clearLayers();
+
+        const routeKeys = routes[activeDay];
+        const latlngs = routeKeys.map(key => [mapLocations[key].lat, mapLocations[key].lng]);
+
+        const uniqueKeys = [...new Set(routeKeys)];
+        uniqueKeys.forEach(key => {
+          const loc = mapLocations[key];
+          const icon = window.L.divIcon({
+            html: getIconHtml(loc.type, loc.name),
+            className: 'custom-leaflet-icon',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
+          });
+          window.L.marker([loc.lat, loc.lng], { icon }).addTo(layerGroup);
+        });
+
+        if (latlngs.length > 1) {
+          const polyline = window.L.polyline(latlngs, {
+            color: getRouteColor(activeDay),
+            weight: activeDay === 'all' ? 3 : 4,
+            opacity: activeDay === 'all' ? 0.6 : 0.8,
+            className: 'leaflet-path-animated',
+            dashArray: null 
+          }).addTo(layerGroup);
+
+          map.fitBounds(polyline.getBounds(), { padding: [40, 40], animate: true, duration: 1 });
+        }
+      }, [activeDay]);
+
+      const itineraryData = [
+        {
+          day: 1, date: "3/30 (월)", title: "석가장 도착 ➔ 광부고성 ➔ 임주",
+          meals: { lunch: "사천요리", dinner: "교자연" }, hotel: "임주 환빈서안호텔 또는 동급 (준5성)",
+          timeline: [
+            { type: 'flight', time: '11:20', text: '인천 출발 ➔ 석가장 국제공항 도착 (제주항공)' },
+            { type: 'bus', time: '오후', text: '가이드 미팅 후 광부고성으로 이동' },
+            { type: 'spot', time: '관광', text: '광부고성 관광 (입구, 광평관아, 고성내부)' },
+            { type: 'bus', time: '이동', text: '석식 후 베이스캠프 임주로 이동 및 숙박' }
+          ]
+        },
+        {
+          day: 2, date: "3/31 (화)", title: "보천대협곡 ➔ 천계산 ➔ 임주",
+          meals: { breakfast: "호텔식", lunch: "산채비빔밥", dinner: "삼겹살 무제한" }, hotel: "임주 환빈서안호텔 또는 동급 (준5성)",
+          timeline: [
+            { type: 'bus', time: '오전', text: '임주 호텔 출발 ➔ 보천대협곡으로 이동' },
+            { type: 'spot', time: '관광', text: '보천대협곡 관광 (모노레일, 케이블카, 유리전망대, 동굴 엘리베이터)' },
+            { type: 'bus', time: '이동', text: '임주 지역으로 재이동' },
+            { type: 'spot', time: '관광', text: '천계산 관광 (운봉화랑 전동카 탑승)' },
+            { type: 'hotel', time: '휴식', text: '임주로 귀환 후 숙박 및 휴식' }
+          ]
+        },
+        {
+          day: 3, date: "4/1 (수)", title: "태항대협곡 ➔ 휘현",
+          meals: { breakfast: "호텔식", lunch: "닭도리탕정식", dinner: "샤브샤브" }, hotel: "휘현 게르 특급호텔 (특별체험)",
+          timeline: [
+            { type: 'bus', time: '오전', text: '임주 출발 ➔ 태항대협곡 풍경구로 이동' },
+            { type: 'spot', time: '종일', text: '태항대협곡 핵심 관광 (대협곡, 도화곡, 환산선, 수녀봉 산책로)' },
+            { type: 'info', time: '혜택', text: '전신마사지 60분 진행 (여행 피로 회복 / 매너팁 별도)' },
+            { type: 'bus', time: '이동', text: '관광 종료 후 휘현으로 이동' },
+            { type: 'hotel', time: '휴식', text: '휘현 도착 및 숙박 (게르 체험)' }
+          ]
+        },
+        {
+          day: 4, date: "4/2 (목)", title: "오지산 관광 ➔ 한단",
+          meals: { breakfast: "호텔식", lunch: "현지식", dinner: "현지식" }, hotel: "한단 영양호텔 또는 동급",
+          timeline: [
+            { type: 'bus', time: '오전', text: '휘현 호텔 조식 후 ➔ 동태항 오지산으로 출발' },
+            { type: 'spot', time: '오전', text: '오지산 관광 (케이블카 왕복, 손오공동상, 재선전, 전망대)' },
+            { type: 'bus', time: '오후', text: '관광 종료 후 한단으로 이동' },
+            { type: 'hotel', time: '휴식', text: '한단 도착 후 숙박 및 휴식' }
+          ]
+        },
+        {
+          day: 5, date: "4/3 (금)", title: "조운묘 ➔ 석가장 ➔ 인천",
+          meals: { breakfast: "호텔식" }, hotel: "-",
+          timeline: [
+            { type: 'bus', time: '오전', text: '한단 호텔 조식 후 출발 ➔ 조운묘로 이동' },
+            { type: 'spot', time: '오전', text: '삼국지 조자룡의 숨결, 조운묘 관광' },
+            { type: 'bus', time: '이동', text: '석가장 국제공항으로 이동' },
+            { type: 'flight', time: '12:15', text: '석가장 출발 ➔ 인천 도착 후 해산 (15:25)' }
+          ]
+        }
+      ];
+
+      const destinationHighlights = [
+        {
+          name: "광부고성",
+          title: "물 위의 성, 북방의 소강남",
+          desc: "2,600년이 넘는 역사를 간직한 수향도시입니다. 성 주변이 넓은 습지와 물길로 둘러싸여 있으며, 성벽과 해자 풍경이 명·청 시기의 형태를 잘 보존하고 있습니다.",
+          tag: "역사문화 탐방 + 성곽 경관 감상 + 수향도시 분위기 체험",
+          icon: <i className="ph-fill ph-bank text-indigo-500 text-xl"></i>,
+          img: "https://tse2.mm.bing.net/th/id/OIP.Q3t_YaFKJ6iGZaLk41my7gHaEj?w=474&h=474&c=7&p=0"
+        },
+        {
+          name: "보천대협곡",
+          title: "비취빛 계곡과 폭포의 향연",
+          desc: "협곡 사이를 흐르는 물과 폭포군, 절벽 지형이 어우러진 수경관 명소입니다. 모노레일, 케이블카, 동굴 엘리베이터 등 입체형 동선을 통해 다채로운 풍경을 감상합니다.",
+          tag: "절벽과 협곡, 폭포와 담수가 어우러진 수경관 명소",
+          icon: <i className="ph-bold ph-waves text-blue-500 text-xl"></i>,
+          img: "https://en.baoquanlvyou.com/templates/default/images/nybqgk_content_r.jpg"
+        },
+        {
+          name: "천계산 (운봉화랑)",
+          title: "하늘과 맞닿은 산, 360도 파노라마",
+          desc: "높고 험준한 산세 대신, 전동차를 타고 절벽 중턱(운봉화랑)을 따라 이동하며 봉우리와 구름이 겹치는 장대한 파노라마를 편안하게 감상할 수 있습니다.",
+          tag: "전동카 탑승 + 태항산 절벽 능선 파노라마 조망 코스",
+          icon: <i className="ph-fill ph-compass text-teal-500 text-xl"></i>,
+          img: "https://ak-d.tripcdn.com/images/1mi1412000d5za1nk0562_W_640_0_R5_Q80.jpg?proc=source/trip"
+        },
+        {
+          name: "태항대협곡",
+          title: "북방 산수 경관의 완결판",
+          desc: "계곡미가 빼어난 '도화곡', 절벽과 산줄기를 내려다보는 전망 도로 '태항천로', 강렬한 암봉 경관인 '왕상암' 등 세 가지 매력이 합쳐진 복합 풍경구입니다.",
+          tag: "도화곡의 물 + 태항천로의 파노라마 + 왕상암의 절벽미",
+          icon: <i className="ph-fill ph-mountains text-emerald-500 text-xl"></i>,
+          img: "https://5ororwxholiorij.ldycdn.com/cloud/kjBqnKprSRijjmimiri/Tai-Hang-Sky-Road.jpg"
+        },
+        {
+          name: "오지산",
+          title: "손오공 전설이 깃든 다섯 봉우리",
+          desc: "다섯 개의 봉우리가 손가락처럼 솟아있는 형상입니다. 케이블카를 타고 정상부 전망대에 올라 태항산의 장쾌한 조망을 쉽게 누릴 수 있는 체험형 명소입니다.",
+          tag: "다섯 손가락 봉우리 + 손오공 전설과 웅장한 전망",
+          icon: <i className="ph-fill ph-map-trifold text-orange-500 text-xl"></i>,
+          img: "https://ak-d.tripcdn.com/images/1lo2212000k19zqonB698_C_1200_800_Q70.webp?proc=source%2ftrip"
+        },
+        {
+          name: "조운묘",
+          title: "삼국지 조자룡 영웅의 숨결",
+          desc: "촉한의 명장 조자룡을 기리는 사당으로 그의 고향 정딩에 위치해 있습니다. 자연 관광을 넘어 삼국지 역사와 영웅의 스토리가 더해진 여행의 완벽한 마무리 코스입니다.",
+          tag: "삼국지 영웅 조자룡 사당 + 명·청 고건축 양식",
+          icon: <i className="ph-fill ph-star text-red-500 text-xl"></i>,
+          img: "https://ak-d.tripcdn.com/images/1mi2012000d8kfaqf241F_W_640_0_R5_Q80.jpg?proc=source/trip"
+        }
+      ];
+
+      const renderIcon = (type) => {
+        switch(type) {
+          case 'flight': return <i className="ph-fill ph-airplane-tilt text-blue-500 text-base"></i>;
+          case 'bus': return <i className="ph-fill ph-bus text-purple-500 text-base"></i>;
+          case 'spot': return <i className="ph-fill ph-mountains text-orange-500 text-base"></i>;
+          case 'restaurant': return <i className="ph-fill ph-fork-knife text-orange-500 text-base"></i>;
+          case 'hotel': return <i className="ph-fill ph-bed text-indigo-500 text-base"></i>;
+          case 'info': return <i className="ph-fill ph-star text-red-500 text-base"></i>;
+          default: return <i className="ph-fill ph-map-pin text-gray-500 text-base"></i>;
+        }
+      };
+
+      return (
+        <div className="min-h-screen font-sans text-gray-800 pb-24 mx-auto max-w-screen-md bg-[#f4f5f7] shadow-xl">
+          {/* Header */}
+          <header className="bg-white px-4 py-3 flex justify-between items-center shadow-sm sticky top-0 z-50">
+            <img 
+              src="https://blogger.googleusercontent.com/img/a/AVvXsEiFoYW0ZEsfI--gMJlRIQWLG3C7S3vbf3easktvaU_yQK27dVXCanN0V_wqtWU-6PtdtaczmCfGX28zgO_FAQ6xHbDgekxq-ahO7xnxbQA5wcMShNyYmKOOi4xB4yr2evXwjqe71qRMFxsSZ0oZoUtbDXUeLoPmR7hbpQxo8DkDDsFm3eI85mmsm1Cjfnw=w200-h72" 
+              alt="에이스투어 로고" 
+              className="h-7 object-contain"
+            />
+            <div className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full border border-orange-100 flex items-center">
+              <i className="ph-fill ph-airplane-tilt mr-1 text-sm"></i>
+              제주항공 첫취항
+            </div>
+          </header>
+
+          {/* Hero Section */}
+          <section className="relative bg-white">
+            <div className="relative h-[400px] w-full overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10"></div>
+              <img 
+                src="https://image1.lottetour.com/static/trvtour/201910/742/f5e62609b14448fb39a777bb52edc31d.jpg" 
+                alt="태항산 배경이미지" 
+                className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-700"
+              />
+              <div className="absolute bottom-0 left-0 p-5 z-20 w-full text-white">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="bg-blue-600 text-white text-[11px] font-bold px-2.5 py-1 rounded shadow-sm">3/30 단 1회 출발</span>
+                  <span className="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-[11px] font-bold px-2.5 py-1 rounded shadow-sm">노옵션</span>
+                  <span className="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-[11px] font-bold px-2.5 py-1 rounded shadow-sm">준5성급 호텔</span>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-extrabold leading-tight mb-2 drop-shadow-lg tracking-tight">
+                  동양의 그랜드캐년, 태항산<br/>제주항공 직항으로 편안하게!
+                </h1>
+                <p className="text-sm text-gray-200 mb-4 drop-shadow font-medium">
+                  석가장 · 광부고성 · 천계산 · 태항대협곡 4박 5일
+                </p>
+                <div className="flex items-end justify-between border-t border-white/20 pt-4">
+                  <span className="text-sm text-gray-300">1인 특가 (기사가이드 별도)</span>
+                  <div className="text-right">
+                    <span className="text-4xl font-black text-[#FEE500] drop-shadow-md">599,000</span>
+                    <span className="text-lg font-medium ml-1">원~</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Interactive Map UI */}
+          <section className="py-8 bg-white mb-2 shadow-sm z-10 relative">
+            <div className="px-4 mb-4">
+              <h2 className="text-lg font-bold flex items-center text-gray-800">
+                <i className="ph-fill ph-map-pin text-blue-600 text-xl mr-1.5"></i>
+                한눈에 보는 여행 동선
+              </h2>
+              <p className="text-[11px] text-gray-500 mt-1 font-medium">일차별 탭을 클릭하면 실제 지도 위에 이동 궤적이 그려집니다.</p>
+            </div>
+
+            <div className="px-4 mb-4">
+              <div className="flex overflow-x-auto hide-scrollbar space-x-2 pb-2">
+                <button 
+                  onClick={() => setActiveDay('all')}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeDay === 'all' ? 'bg-gray-800 text-white border-gray-800 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  전체 여정
+                </button>
+                {[1, 2, 3, 4, 5].map((d) => (
+                  <button 
+                    key={d}
+                    onClick={() => setActiveDay(`day${d}`)}
+                    className={`flex-shrink-0 flex items-center px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeDay === `day${d}` ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    {d}일차
+                    <div className="w-2 h-2 rounded-full ml-1.5 shadow-sm" style={{backgroundColor: getRouteColor(`day${d}`)}}></div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mx-4 mb-2 relative bg-[#f0f4f8] rounded-2xl border border-gray-200 overflow-hidden h-[300px] shadow-inner z-0">
+              <div id="real-map" className="w-full h-full"></div>
+            </div>
+            
+            <div className="px-4 mt-3">
+              <div className="flex items-start text-[11px] text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-100">
+                <i className="ph-fill ph-info text-base mr-1 mt-0.5 flex-shrink-0"></i>
+                <p className="leading-tight">
+                  상기 지도상의 동선은 거시적인 랜드마크 기준이며, 현지 사정에 따라 변동될 수 있습니다.<br/>
+                  <span className="text-gray-500 text-[10px] mt-1 inline-block">Map Data: Leaflet | &copy; OpenStreetMap &copy; CARTO</span>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Destination Highlights */}
+          <section className="bg-white py-10 mb-2 border-y border-gray-100">
+            <div className="px-4 mb-6">
+              <div className="inline-block bg-orange-100 text-orange-700 text-[11px] font-bold px-2 py-1 rounded-md mb-2">
+                DESTINATIONS
+              </div>
+              <h2 className="text-xl font-bold flex items-center text-gray-800 leading-tight">
+                이번 여행, <br/>이곳만은 꼭 기억하세요
+              </h2>
+              <p className="text-xs text-gray-500 mt-2">단순한 풍경을 넘어, 전문 가이드의 시선으로 짚어드리는 핵심 관전 포인트입니다.</p>
+            </div>
+
+            <div className="px-4 space-y-6">
+              {destinationHighlights.map((dest, idx) => (
+                <div key={idx} className="bg-white rounded-2xl overflow-hidden shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-gray-100">
+                  <div className="relative h-60 md:h-72 lg:h-80 w-full">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10"></div>
+                    <img 
+                      src={dest.img} 
+                      alt={dest.name} 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-3 left-4 z-20 flex items-center">
+                      <div className="bg-white/20 backdrop-blur-md p-1.5 rounded-lg mr-2 border border-white/30">
+                        {dest.icon}
+                      </div>
+                      <div>
+                        <h3 className="text-white text-lg font-bold drop-shadow-md">{dest.name}</h3>
+                        <p className="text-white/90 text-[11px] font-medium drop-shadow">{dest.title}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-5">
+                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 mb-3 flex items-start">
+                      <i className="ph-fill ph-check-circle text-orange-500 text-base mr-2 flex-shrink-0 mt-0.5"></i>
+                      <p className="text-[12px] font-bold text-gray-800 leading-tight">
+                        {dest.tag}
+                      </p>
+                    </div>
+                    <p className="text-[13px] text-gray-600 leading-relaxed break-keep font-medium">
+                      {dest.desc}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Video Section */}
+          <section className="px-4 py-8 bg-black text-white mb-2">
+            <h2 className="text-lg font-bold mb-2 flex items-center">
+              <i className="ph-fill ph-play-circle text-red-500 text-xl mr-1.5"></i>
+              영상으로 미리보는 태항산
+            </h2>
+            <p className="text-[12px] text-gray-400 mb-4">대자연의 경이로움을 4박 5일 동안 직접 눈으로 담아보세요.</p>
+            <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg border border-gray-700 relative pb-[56.25%]">
+              <iframe 
+                className="absolute top-0 left-0 w-full h-full"
+                src="https://www.youtube.com/embed/XXyo0mMiRoE?rel=0&showinfo=0" 
+                title="태항산 절경" 
+                frameBorder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+              ></iframe>
+            </div>
+          </section>
+
+          {/* Vertical Timeline Itinerary */}
+          <section className="bg-white mb-2 pt-8 pb-4">
+            <div className="px-4 mb-6">
+              <h2 className="text-lg font-bold flex items-center">
+                <i className="ph-fill ph-calendar-blank text-blue-600 text-xl mr-1.5"></i>
+                상세 일정표
+              </h2>
+            </div>
+
+            <div className="sticky top-[52px] bg-white z-40 border-b border-gray-100 shadow-sm px-4 py-2">
+              <div className="flex overflow-x-auto hide-scrollbar space-x-2">
+                {itineraryData.map((item) => (
+                  <button
+                    key={item.day}
+                    onClick={() => setActiveTab(item.day)}
+                    className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                      activeTab === item.day 
+                        ? 'bg-blue-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {item.day}일차
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-4 py-6 bg-gray-50 min-h-[400px]">
+              {itineraryData.filter(d => d.day === activeTab).map((data) => (
+                <div key={data.day} className="animate-fadeIn">
+                  <div className="mb-6">
+                    <span className="text-sm font-bold text-blue-600">{data.date}</span>
+                    <h3 className="text-xl font-extrabold text-gray-800 mt-1">{data.title}</h3>
+                  </div>
+
+                  <div className="relative border-l-2 border-blue-100 ml-3 md:ml-4 space-y-6 pb-4">
+                    {data.timeline.map((item, idx) => (
+                      <div key={idx} className="relative pl-6">
+                        <div className="absolute -left-[17px] top-0.5 w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center z-10">
+                          {renderIcon(item.type)}
+                        </div>
+                        
+                        <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
+                          <div className="flex items-start">
+                            {item.time && (
+                              <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 text-[11px] font-bold rounded mr-2 mt-0.5 flex-shrink-0">
+                                {item.time}
+                              </span>
+                            )}
+                            <p className={`text-[13px] leading-relaxed break-keep ${item.type === 'info' ? 'text-red-600 font-bold' : 'text-gray-700 font-medium'}`}>
+                              {item.text}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="grid grid-cols-1 divide-y divide-gray-100 text-[12px]">
+                      <div className="flex px-4 py-3">
+                        <div className="w-12 font-bold text-gray-800 flex items-center">식사</div>
+                        <div className="flex-1 text-gray-600">
+                          {data.meals.breakfast && <span className="mr-3">조: {data.meals.breakfast}</span>}
+                          {data.meals.lunch && <span className="mr-3">중: {data.meals.lunch}</span>}
+                          {data.meals.dinner && <span>석: {data.meals.dinner}</span>}
+                        </div>
+                      </div>
+                      <div className="flex px-4 py-3 bg-gray-50/50">
+                        <div className="w-12 font-bold text-gray-800 flex items-center">숙박</div>
+                        <div className="flex-1 font-medium text-blue-700">{data.hotel}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Included / Excluded Details */}
+          <section className="px-4 py-8 bg-white mb-2">
+            <h2 className="text-lg font-bold mb-4 flex items-center">
+              <i className="ph-fill ph-info text-blue-600 text-xl mr-1.5"></i>
+              안내사항
+            </h2>
+            
+            <div className="space-y-3">
+              <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+                <h3 className="font-bold text-blue-800 mb-2 flex items-center text-[13px]">
+                  <i className="ph-fill ph-check-circle text-base mr-1.5"></i> 포함 사항
+                </h3>
+                <ul className="space-y-1.5 text-[12px] text-gray-700">
+                  <li className="flex items-start"><span className="text-blue-500 mr-1.5">•</span> 왕복 항공료 및 TAX/유류할증료</li>
+                  <li className="flex items-start"><span className="text-blue-500 mr-1.5">•</span> 전일정 특급호텔 (2인 1실) 및 식사</li>
+                  <li className="flex items-start"><span className="text-blue-500 mr-1.5">•</span> VIP 리무진 차량 및 관광지 입장료</li>
+                  <li className="flex items-start font-bold text-blue-700"><span className="mr-1.5">•</span> 전신마사지 60분 (매너팁 별도)</li>
+                </ul>
+              </div>
+              
+              <div className="bg-red-50/50 rounded-xl p-4 border border-red-100">
+                <h3 className="font-bold text-red-800 mb-2 flex items-center text-[13px]">
+                  <i className="ph-fill ph-x-circle text-base mr-1.5"></i> 불포함 사항
+                </h3>
+                <ul className="space-y-1.5 text-[12px] text-gray-700">
+                  <li className="flex items-start"><span className="text-red-500 mr-1.5">•</span> <strong className="text-red-700">기사&가이드 경비 (1인당 $50 현지 지불)</strong></li>
+                  <li className="flex items-start"><span className="text-red-500 mr-1.5">•</span> 중국 단체비자 발급 비용</li>
+                  <li className="flex items-start"><span className="text-red-500 mr-1.5">•</span> 개인 발생 비용 및 호텔/마사지 매너팁</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3.5 bg-gray-50 rounded-xl text-[11px] text-gray-500 border border-gray-200 leading-relaxed">
+              <strong>[쇼핑조건]</strong> 노옵션 / 쇼핑 2회 (라텍스, 찻집, 침향 중 2회 방문)<br/>
+              <strong>[여권안내]</strong> 출발일 기준 여권 만료일이 6개월 이상 남아있어야 합니다.
+            </div>
+          </section>
+
+          {/* Footer System Text & Tourmaker Link */}
+          <footer className="bg-[#f8f9fa] py-10 px-4 text-center mt-2 mb-20 border-t border-gray-200">
+            <p className="text-[12px] md:text-[13px] text-[#6c757d] leading-relaxed font-medium mb-5">
+              [System Powered by TOURMAKER]<br/>
+              본 스마트 가이드북은 <strong>에이스투어</strong>의 기획과 <br className="md:hidden"/>
+              <a href="http://tourmaker.kr" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline">투어메이커</a>의 트래블 테크 기술 제휴로 제작되었습니다.
+            </p>
+            
+            <a 
+              href="http://tourmaker.kr" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center px-5 py-2.5 border border-gray-300 rounded-full text-[12px] font-bold text-gray-600 bg-white hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              <img 
+                src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgHfgIX70O5k6Anuo0UgALIdaG9jSga9auHu3uyz0uEirylGPAJnjN_qQbvEGMUvPqUQf_g9FMNUHRxlDcUBf4vZ3Mpy4TnA9WxbmzWYK11gt2zuy_Irl4wctNFjcjLyPo0GPXV792o_J7L9guRMuDfeC1gy7USwywjYbECZgzcsHybuGRRAXAnO1eNmP8/s320/logo.png" 
+                alt="투어메이커" 
+                className="h-3.5 mr-2 opacity-80" 
+              />
+              투어메이커 홈페이지 방문하기
+              <i className="ph-bold ph-arrow-square-out text-sm ml-1.5 text-gray-400"></i>
+            </a>
+          </footer>
+
+          {/* Floating Action Buttons */}
+          <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 p-3 px-4 flex flex-col sm:flex-row gap-2 z-50 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mx-auto max-w-screen-md right-0">
+            <div className="hidden sm:flex items-center pl-2 flex-1">
+              <div>
+                <p className="text-[11px] text-gray-500 font-bold">담당자 직접 상담</p>
+                <p className="text-[14px] font-black text-gray-800">권정순 소장</p>
+              </div>
+            </div>
+            <div className="flex flex-1 gap-2">
+              <a 
+                href="sms:010-8792-4464"
+                className="flex-1 bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl flex justify-center items-center hover:bg-gray-200 transition-colors border border-gray-200"
+              >
+                <i className="ph-fill ph-chat-circle-text text-gray-600 text-xl mr-1.5"></i>
+                <span className="text-[14px]">문자 상담</span>
+              </a>
+              <a 
+                href="tel:010-8792-4464"
+                className="flex-1 bg-blue-600 text-white font-bold py-3.5 rounded-xl flex justify-center items-center shadow-md hover:bg-blue-700 transition-colors"
+              >
+                <i className="ph-fill ph-phone text-xl mr-1.5"></i>
+                <span className="text-[14px]">전화 연결</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
